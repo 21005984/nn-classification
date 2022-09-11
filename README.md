@@ -28,104 +28,164 @@ Train the data and then predict using Tensorflow
 ```
 python3
 import pandas as pd
-import numpy as np
-
-df=pd.read_csv("customers.csv")
-
-
-df.head()
-
-df=df.dropna(axis=0)
-
-df["Segmentation"].unique()
-
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import load_model
+import pickle
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import BatchNormalization
 import tensorflow as tf
-
-x=df.drop(["Segmentation","Var_1","ID"],axis=1)
-y=df[["Segmentation"]].values
-
-
-df["Gender"].unique(),df["Ever_Married"].unique(),df["Graduated"].unique(),df["Profession"].unique(),df["Spending_Score"].unique()
-
+import seaborn as sns
+from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
-
-lr=OneHotEncoder()
-
-lr.fit(y)
-
-lr.categories_
-
-y=lr.transform(y).toarray()
-
-y
-
 from sklearn.preprocessing import OrdinalEncoder
-
-lst=[['Male', 'Female'],['No', 'Yes'],['No', 'Yes'],['Healthcare', 'Engineer', 'Lawyer', 'Artist', 'Doctor','Homemaker', 'Entertainment', 'Marketing', 'Executive'],['Low', 'High', 'Average']]
-
-enc = OrdinalEncoder(categories=lst)
-
-x[['Gender','Ever_Married','Graduated','Profession','Spending_Score']] = enc.fit_transform(x[['Gender',
+from sklearn.metrics import classification_report,confusion_matrix
+import numpy as np
+import matplotlib.pylab as plt
+customer_df = pd.read_csv('customers.csv')
+customer_df.columns
+customer_df.dtypes
+customer_df.shape
+customer_df.isnull().sum()
+customer_df_cleaned = customer_df.dropna(axis=0)
+customer_df_cleaned.isnull().sum()
+customer_df_cleaned.shape
+customer_df_cleaned.dtypes
+customer_df_cleaned['Gender'].unique()
+customer_df_cleaned['Ever_Married'].unique()
+customer_df_cleaned['Graduated'].unique()
+customer_df_cleaned['Profession'].unique()
+customer_df_cleaned['Spending_Score'].unique()
+customer_df_cleaned['Var_1'].unique()
+customer_df_cleaned['Segmentation'].unique()
+categories_list=[['Male', 'Female'],
+           ['No', 'Yes'],
+           ['No', 'Yes'],
+           ['Healthcare', 'Engineer', 'Lawyer', 'Artist', 'Doctor',
+            'Homemaker', 'Entertainment', 'Marketing', 'Executive'],
+           ['Low', 'Average', 'High']
+           ]
+enc = OrdinalEncoder(categories=categories_list)
+customers_1 = customer_df_cleaned.copy()
+customers_1[['Gender',
+             'Ever_Married',
+              'Graduated','Profession',
+              'Spending_Score']] = enc.fit_transform(customers_1[['Gender',
                                                                  'Ever_Married',
                                                                  'Graduated','Profession',
                                                                  'Spending_Score']])
-
-x=x.drop(["Age","Work_Experience","Family_Size"],axis=1)
-
-x=x.values
-
-from sklearn.model_selection import train_test_split
-
-X_train,X_test,y_train,y_test=train_test_split(x,y,
-                                               test_size=0.10,
+customers_1.dtypes
+le = LabelEncoder()
+customers_1['Segmentation'] = le.fit_transform(customers_1['Segmentation'])
+customers_1.dtypes
+customers_1 = customers_1.drop('ID',axis=1)
+customers_1 = customers_1.drop('Var_1',axis=1)
+customers_1.dtypes
+corr = customers_1.corr()
+sns.heatmap(corr, 
+        xticklabels=corr.columns,
+        yticklabels=corr.columns,
+        cmap="BuPu",
+        annot= True)
+sns.pairplot(customers_1)
+sns.distplot(customers_1['Age'])
+plt.figure(figsize=(10,6))
+sns.countplot(customers_1['Family_Size'])
+plt.figure(figsize=(10,6))
+sns.boxplot(x='Family_Size',y='Age',data=customers_1)
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='Family_Size',y='Spending_Score',data=customers_1)
+plt.figure(figsize=(10,6))
+sns.scatterplot(x='Family_Size',y='Age',data=customers_1)
+customers_1.describe()
+customers_1['Segmentation'].unique()
+X=customers_1[['Gender','Ever_Married','Age','Graduated','Profession','Work_Experience','Spending_Score','Family_Size']].values
+y1 = customers_1[['Segmentation']].values
+one_hot_enc = OneHotEncoder()
+one_hot_enc.fit(y1)
+y1.shape
+y = one_hot_enc.transform(y1).toarray()
+y.shape
+y1[0]
+y[0]
+X.shape
+X_train,X_test,y_train,y_test=train_test_split(X,y,
+                                               test_size=0.33,
                                                random_state=50)
-
-model=tf.keras.Sequential([tf.keras.layers.Input(shape=(5,)),
-                           tf.keras.layers.Dense(128,activation="relu"),
-                           tf.keras.layers.Dense(64,activation="relu"),
-                           tf.keras.layers.Dense(32,activation="relu"),
-                           tf.keras.layers.Dense(4,activation="softmax")])
-
-model.compile(optimizer=tf.keras.optimizers.Adam(),
-                 loss=tf.keras.losses.CategoricalCrossentropy(),
+                                               X_train[0]
+X_train.shape
+scaler_age = MinMaxScaler()
+scaler_age.fit(X_train[:,2].reshape(-1,1))
+X_train_scaled = np.copy(X_train)
+X_test_scaled = np.copy(X_test)
+X_train_scaled[:,2] = scaler_age.transform(X_train[:,2].reshape(-1,1)).reshape(-1)
+X_test_scaled[:,2] = scaler_age.transform(X_test[:,2].reshape(-1,1)).reshape(-1)
+ai_brain = Sequential([
+    Dense(8,input_shape=(8,)),
+    Dense(10,activation='relu'),
+    Dense(12,activation='relu'),
+    Dense(16,activation='relu'),
+    Dense(32,activation='relu'),
+    Dense(64,activation='relu'),
+    Dense(128,activation='relu'),
+    Dense(4,activation='softmax')
+ 
+])
+ai_brain.compile(optimizer='adam',
+                 loss='categorical_crossentropy',
                  metrics=['accuracy'])
+early_stop = EarlyStopping(monitor='val_loss', patience=2)
+ai_brain.fit(x=X_train_scaled,y=y_train,
+             epochs=2000,batch_size=256,
+             validation_data=(X_test_scaled,y_test),
+             )
+metrics = pd.DataFrame(ai_brain.history.history)
+metrics.head()
+metrics[['loss','val_loss']].plot()
+predictions = ai_brain.predict_classes(X_test)
+x_test_predictions = np.argmax(ai_brain.predict(X_test_scaled), axis=1)
+x_test_predictions.shape
+y_test_truevalue = np.argmax(y_test,axis=1)
+y_test_truevalue.shape
+print(confusion_matrix(y_test_truevalue,x_test_predictions))
+print(classification_report(y_test_truevalue,x_test_predictions))
+ai_brain.save('customer_classification_model.h5')
+with open('customer_data.pickle', 'wb') as fh:
+   pickle.dump([X_train_scaled,y_train,X_test_scaled,y_test,customers_1,customer_df_cleaned,scaler_age,enc,one_hot_enc,le], fh)
+ai_brain = load_model('customer_classification_model.h5')
+with open('customer_data.pickle', 'rb') as fh:
+   [X_train_scaled,y_train,X_test_scaled,y_test,customers_1,customer_df_cleaned,scaler_age,enc,one_hot_enc,le]=pickle.load(fh)
+x_single_prediction = np.argmax(ai_brain.predict(X_test_scaled[1:2,:]), axis=1)
+print(x_single_prediction)
+print(le.inverse_transform(x_single_prediction))
 
-model.fit(X_train,y_train,epochs=20,validation_data=(X_test,y_test),batch_size=32)
-
-pd.DataFrame(model.history.history).plot()
-
-y_preds=tf.argmax(model.predict(X_test),axis=1)
-
-import sklearn
-
-sklearn.metrics.classification_report(tf.argmax(y_test,axis=1),y_preds)
-
-sklearn.metrics.confusion_matrix(tf.argmax(y_test,axis=1),y_preds)
-
-tf.argmax(model.predict([[0., 0., 0., 6., 0.]]),axis=1)
 ```
 
 ## Dataset Information
+![image](https://user-images.githubusercontent.com/75235402/189541339-c6405037-ba3c-45da-a24f-4f1f85fd2f8c.png)
 
-Include screenshot of the dataset
 
 ## OUTPUT
 
 ### Training Loss, Validation Loss Vs Iteration Plot
-
-![image](https://user-images.githubusercontent.com/75235128/189539009-b7f6e85c-58d1-4d8c-9dd8-bb82ab656a98.png)
+![image](https://user-images.githubusercontent.com/75235402/189541726-b3fe661c-f6ce-406f-9e17-b646828914d8.png)
+![image](https://user-images.githubusercontent.com/75235402/189541744-3fa74fca-230a-4d11-bb1d-8ac2684955e3.png)
 
 ### Classification Report
+![image](https://user-images.githubusercontent.com/75235402/189541896-800202b1-1ed8-454f-9c53-b918b40379b2.png)
 
-![image](https://user-images.githubusercontent.com/75235128/189538996-10b2d542-0d45-4a6a-9d90-7554e5f44344.png)
 
 ### Confusion Matrix
+![image](https://user-images.githubusercontent.com/75235402/189539990-a0281942-d7c0-4177-994a-3e257e87c1fc.png)
 
-![image](https://user-images.githubusercontent.com/75235128/189539048-985aa259-372d-4a5d-a080-c0fabe6cc9b2.png)
 
 ### New Sample Data Prediction
 
-![image](https://user-images.githubusercontent.com/75235128/189539113-9ecd5103-043d-4baf-b376-f586cf00e662.png)
+![image](https://user-images.githubusercontent.com/75235402/189541938-670e25f0-b6a4-44c0-84b9-0bf2bb531efe.png)
+
 
 ## RESULT
 
